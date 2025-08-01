@@ -1,26 +1,40 @@
 
-import { z } from 'zod';
+import { db } from '../db';
+import { tasksTable } from '../db/schema';
 import { type Task } from '../schema';
+import { eq } from 'drizzle-orm';
 
-const toggleTaskCompletionInputSchema = z.object({
-    id: z.number()
-});
+export type ToggleTaskCompletionInput = {
+  id: number;
+};
 
-export type ToggleTaskCompletionInput = z.infer<typeof toggleTaskCompletionInputSchema>;
+export const toggleTaskCompletion = async (input: ToggleTaskCompletionInput): Promise<Task> => {
+  try {
+    // First, get the current task to check its completion status
+    const existingTasks = await db.select()
+      .from(tasksTable)
+      .where(eq(tasksTable.id, input.id))
+      .execute();
 
-export async function toggleTaskCompletion(input: ToggleTaskCompletionInput): Promise<Task> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is toggling the completion status of a task.
-    // It should fetch the current task, flip the completed boolean, and save it back.
-    return Promise.resolve({
-        id: input.id,
-        title: 'Sample Task',
-        description: null,
-        due_date: null,
-        completed: true, // Toggled completion status
-        priority: 'medium',
-        category_id: null,
-        created_at: new Date(),
+    if (existingTasks.length === 0) {
+      throw new Error(`Task with id ${input.id} not found`);
+    }
+
+    const currentTask = existingTasks[0];
+
+    // Toggle the completion status and update the task
+    const result = await db.update(tasksTable)
+      .set({
+        completed: !currentTask.completed,
         updated_at: new Date()
-    } as Task);
-}
+      })
+      .where(eq(tasksTable.id, input.id))
+      .returning()
+      .execute();
+
+    return result[0];
+  } catch (error) {
+    console.error('Task completion toggle failed:', error);
+    throw error;
+  }
+};

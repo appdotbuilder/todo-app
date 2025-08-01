@@ -1,4 +1,7 @@
 
+import { db } from '../db';
+import { categoriesTable, tasksTable } from '../db/schema';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 const deleteCategoryInputSchema = z.object({
@@ -8,8 +11,35 @@ const deleteCategoryInputSchema = z.object({
 export type DeleteCategoryInput = z.infer<typeof deleteCategoryInputSchema>;
 
 export async function deleteCategory(input: DeleteCategoryInput): Promise<{ success: boolean }> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is deleting a category from the database.
-    // Should also handle cascading or preventing deletion if tasks are assigned to this category.
-    return Promise.resolve({ success: true });
+    try {
+        // Check if category exists
+        const existingCategory = await db.select()
+            .from(categoriesTable)
+            .where(eq(categoriesTable.id, input.id))
+            .execute();
+
+        if (existingCategory.length === 0) {
+            throw new Error('Category not found');
+        }
+
+        // Check if there are tasks assigned to this category
+        const tasksWithCategory = await db.select()
+            .from(tasksTable)
+            .where(eq(tasksTable.category_id, input.id))
+            .execute();
+
+        if (tasksWithCategory.length > 0) {
+            throw new Error('Cannot delete category with assigned tasks');
+        }
+
+        // Delete the category
+        await db.delete(categoriesTable)
+            .where(eq(categoriesTable.id, input.id))
+            .execute();
+
+        return { success: true };
+    } catch (error) {
+        console.error('Category deletion failed:', error);
+        throw error;
+    }
 }
